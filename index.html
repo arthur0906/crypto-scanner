@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crypto Spread Tracker PRO</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="header">
+        <div class="formula-box">
+            <span class="formula-text">PnL = (Entry Spread - Current Spread) x Amount</span>
+        </div>
+        <button id="add-card-btn" class="btn-primary">+ Add Position</button>
+    </div>
+
+    <div class="dashboard" id="dashboard">
+        <template id="card-template">
+            <div class="position-card">
+                <div class="card-header">
+                    <input type="text" class="search-coin" placeholder="SEARCH COIN" value="BTC">
+                    <button class="close-btn">&times;</button>
+                </div>
+                
+                <div class="exchanges-row">
+                    <!-- SHORT LEG -->
+                    <div class="exchange-col">
+                        <label class="red-text">▼ SHORT — EXCHANGE A</label>
+                        <select class="exchange-select short-exchange">
+                            <option value="hyperliquid">Hyperliquid</option>
+                            <option value="binance">Binance</option>
+                            <option value="bybit">Bybit</option>
+                            <option value="okx">OKX</option>
+                            <option value="bitget">Bitget</option>
+                            <option value="bingx">BingX</option>
+                            <option value="kucoin">KuCoin</option>
+                            <option value="gate">Gate.io</option>
+                            <option value="htx">HTX</option>
+                            <option value="phemex">Phemex</option>
+                            <option value="bitmart">BitMart</option>
+                            <option value="coinex">CoinEx</option>
+                            <option value="weex">Weex</option>
+                            <option value="ourbit">Ourbit</option>
+                            <option value="xt">XT.com</option>
+                            <option value="aster">Aster DEX</option>
+                            <option value="lighter">Lighter DEX</option>
+                        </select>
+                        <select class="market-type-select short-market">
+                            <option value="futures">Futures (Perp)</option>
+                            <option value="spot">Spot</option>
+                        </select>
+                        <input type="text" class="ticker-input short-ticker" placeholder="Ticker">
+                    </div>
+                    
+                    <div class="vs-text">vs</div>
+                    
+                    <!-- LONG LEG -->
+                    <div class="exchange-col">
+                        <label class="green-text">▲ LONG — EXCHANGE B</label>
+                        <select class="exchange-select long-exchange">
+                            <option value="hyperliquid">Hyperliquid</option>
+                            <option value="binance" selected>Binance</option>
+                            <option value="bybit">Bybit</option>
+                            <option value="okx">OKX</option>
+                            <option value="bitget">Bitget</option>
+                            <option value="bingx">BingX</option>
+                            <option value="kucoin">KuCoin</option>
+                            <option value="gate">Gate.io</option>
+                            <option value="htx">HTX</option>
+                            <option value="phemex">Phemex</option>
+                            <option value="bitmart">BitMart</option>
+                            <option value="coinex">CoinEx</option>
+                            <option value="weex">Weex</option>
+                            <option value="ourbit">Ourbit</option>
+                            <option value="xt">XT.com</option>
+                            <option value="aster">Aster DEX</option>
+                            <option value="lighter">Lighter DEX</option>
+                        </select>
+                        <select class="market-type-select long-market">
+                            <option value="futures">Futures (Perp)</option>
+                            <option value="spot">Spot</option>
+                        </select>
+                        <input type="text" class="ticker-input long-ticker" placeholder="Ticker">
+                    </div>
+                </div>
+
+                <div class="entries-row">
+                    <div class="input-group">
+                        <label>ENTRY <span class="short-ex-label">EXCHANGE A</span></label>
+                        <input type="number" class="entry-a" step="0.000001" placeholder="0.00">
+                    </div>
+                    <div class="input-group">
+                        <label>ENTRY <span class="long-ex-label">EXCHANGE B</span></label>
+                        <input type="number" class="entry-b" step="0.000001" placeholder="0.00">
+                    </div>
+                    <div class="input-group">
+                        <label>AMOUNT (units)</label>
+                        <input type="number" class="amount" step="1" placeholder="0">
+                    </div>
+                </div>
+
+                <div class="entries-row" style="margin-top: 15px;">
+                    <div class="input-group">
+                        <label>BALANCE A (USDT)</label>
+                        <input type="number" class="balance-a" step="1" placeholder="Margin for A">
+                    </div>
+                    <div class="input-group">
+                        <label>BALANCE B (USDT)</label>
+                        <input type="number" class="balance-b" step="1" placeholder="Margin for B">
+                    </div>
+                    <div class="input-group" style="visibility: hidden;">
+                        <!-- Spacer -->
+                    </div>
+                </div>
+
+                <div class="open-time-row">
+                    <label>OPEN TIME (FOR FUNDING TRACKING)</label>
+                    <input type="datetime-local" class="open-time">
+                </div>
+
+                <div class="entries-row" style="margin-top: 15px;">
+                    <div class="input-group">
+                        <label>CLOSE <span class="short-ex-label">EXCHANGE A</span></label>
+                        <input type="number" class="close-a" step="0.000001" placeholder="Leave empty if open">
+                    </div>
+                    <div class="input-group">
+                        <label>CLOSE <span class="long-ex-label">EXCHANGE B</span></label>
+                        <input type="number" class="close-b" step="0.000001" placeholder="Leave empty if open">
+                    </div>
+                    <div class="input-group" style="visibility: hidden;">
+                        <!-- Spacer for alignment -->
+                    </div>
+                </div>
+
+                <div class="current-prices-row">
+                    <div class="price-col">
+                        <label class="short-ex-label">EXCHANGE A</label>
+                        <input type="number" class="current-a" step="0.000001" placeholder="Live Price..." readonly>
+                    </div>
+                    <div class="price-col">
+                        <label class="long-ex-label">EXCHANGE B</label>
+                        <input type="number" class="current-b" step="0.000001" placeholder="Live Price..." readonly>
+                    </div>
+                </div>
+
+                <div class="stats-row spread-stats">
+                    <div class="stat-item">
+                        <span class="stat-label">Entry Spread</span>
+                        <div>
+                            <span class="stat-value entry-spread-val">0.0000</span>
+                            <span class="stat-value entry-spread-pct" style="font-size: 0.85em; opacity: 0.8; margin-left: 5px;">(0.00%)</span>
+                        </div>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Cur/Close Spread</span>
+                        <div>
+                            <span class="stat-value cur-spread-val">0.0000</span>
+                            <span class="stat-value cur-spread-pct" style="font-size: 0.85em; opacity: 0.8; margin-left: 5px;">(0.00%)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="stats-row pnl-stats">
+                    <div class="stat-item">
+                        <span class="stat-label">Short A PnL</span>
+                        <span class="stat-value short-pnl-val">+$0.00</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Long B PnL</span>
+                        <span class="stat-value long-pnl-val">-$0.00</span>
+                    </div>
+                </div>
+
+                <div class="stats-row funding-stats">
+                    <div class="stat-item tooltip-container">
+                        <span class="stat-label">Funding PnL</span>
+                        <span class="stat-value funding-pnl-val">+$0.00</span>
+                        <span class="tooltip-text funding-pnl-tooltip"></span>
+                    </div>
+                    <div class="stat-item tooltip-container">
+                        <span class="stat-label">Cur Funding A</span>
+                        <span class="stat-value funding-rate-a">0.0000%</span>
+                        <span class="tooltip-text funding-rate-a-tooltip"></span>
+                    </div>
+                    <div class="stat-item tooltip-container">
+                        <span class="stat-label">Cur Funding B</span>
+                        <span class="stat-value funding-rate-b">0.0000%</span>
+                        <span class="tooltip-text funding-rate-b-tooltip"></span>
+                    </div>
+                </div>
+
+                <div class="stats-row liq-stats" style="margin-top: 15px;">
+                    <div class="stat-item">
+                        <span class="stat-label">Liq Price A (Short)</span>
+                        <span class="stat-value liq-a-val" style="color: #ff4d4d;">-</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Liq Price B (Long)</span>
+                        <span class="stat-value liq-b-val" style="color: #00e676;">-</span>
+                    </div>
+                </div>
+
+                <div class="totals-row">
+                    <div class="total-box">
+                        <div class="total-label">SPREAD PNL</div>
+                        <div class="total-value spread-pnl-total">+$0.00</div>
+                    </div>
+                    <div class="total-box">
+                        <div class="total-label">TOTAL PNL</div>
+                        <div class="total-value total-pnl">+$0.00</div>
+                    </div>
+                    <div class="total-box">
+                        <div class="total-label">TARGET PNL (SPREAD=0)</div>
+                        <div class="total-value close-pnl">+$0.00</div>
+                    </div>
+                </div>
+            </div>
+        </template>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,291 @@
+:root {
+    --bg-main: #0B0E14;
+    --bg-card: #151822;
+    --bg-input: #1A1D27;
+    --border-color: #2A2E3D;
+    --text-main: #FFFFFF;
+    --text-muted: #8A92A6;
+    --color-green: #00E676;
+    --color-red: #FF3D00;
+    --color-accent: #3D5AFE;
+    --font-family: 'Inter', sans-serif;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background-color: var(--bg-main);
+    color: var(--text-main);
+    font-family: var(--font-family);
+    padding: 20px;
+    min-height: 100vh;
+}
+
+/* Header */
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+}
+
+.formula-box {
+    background-color: var(--bg-card);
+    border: 1px solid #FFD54F;
+    padding: 10px 20px;
+    border-radius: 8px;
+}
+
+.formula-text {
+    color: #FFD54F;
+    font-family: monospace;
+    font-size: 14px;
+}
+
+.btn-primary {
+    background-color: var(--color-accent);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: background 0.2s;
+}
+
+.btn-primary:hover {
+    background-color: #536DFE;
+}
+
+/* Dashboard Grid */
+.dashboard {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(450px, 1fr));
+    gap: 20px;
+}
+
+/* Position Card */
+.position-card {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    position: relative;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+}
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.search-coin {
+    background: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--text-main);
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-weight: bold;
+    width: 200px;
+}
+
+.close-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 24px;
+    cursor: pointer;
+}
+
+.close-btn:hover {
+    color: var(--color-red);
+}
+
+/* Typography & Colors */
+label {
+    display: block;
+    font-size: 10px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 5px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+.red-text { color: var(--color-red); }
+.green-text { color: var(--color-green); }
+
+/* Inputs */
+input, select {
+    background-color: var(--bg-input);
+    border: 1px solid var(--border-color);
+    color: var(--text-main);
+    padding: 10px;
+    border-radius: 6px;
+    font-size: 14px;
+    width: 100%;
+    outline: none;
+    transition: border 0.2s;
+}
+
+input:focus, select:focus {
+    border-color: var(--color-accent);
+}
+
+/* Layouts */
+.exchanges-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.exchange-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.vs-text {
+    color: var(--text-muted);
+    font-size: 12px;
+    margin-top: 15px;
+}
+
+.entries-row {
+    display: flex;
+    gap: 10px;
+}
+
+.input-group {
+    flex: 1;
+}
+
+.current-prices-row {
+    display: flex;
+    gap: 10px;
+    background-color: var(--bg-input);
+    padding: 15px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+
+.price-col {
+    flex: 1;
+}
+
+.price-col input {
+    font-size: 18px;
+    font-weight: bold;
+    background: transparent;
+    border: none;
+    padding: 0;
+}
+
+/* Stats */
+.stats-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.stat-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.stat-label {
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+.stat-value {
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.val-green { color: var(--color-green); }
+.val-red { color: var(--color-red); }
+
+/* Funding Inline */
+.input-group-inline {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.input-group-inline input {
+    width: 80px;
+    padding: 5px;
+    text-align: right;
+}
+
+/* Totals */
+.totals-row {
+    display: flex;
+    gap: 10px;
+    margin-top: 5px;
+}
+
+.total-box {
+    flex: 1;
+    background-color: rgba(255,255,255,0.03);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 15px 10px;
+    text-align: center;
+}
+
+.total-label {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+    letter-spacing: 0.5px;
+}
+
+.total-value {
+    font-size: 20px;
+    font-weight: 700;
+}
+
+/* Custom Tooltip */
+.tooltip-container {
+    position: relative;
+    cursor: help;
+    display: inline-flex;
+    align-items: center;
+}
+.tooltip-container .tooltip-text {
+    visibility: hidden;
+    background-color: #1e222d;
+    color: #fff;
+    text-align: left;
+    border-radius: 6px;
+    padding: 8px 12px;
+    position: absolute;
+    z-index: 100;
+    bottom: 125%;
+    left: 50%;
+    transform: translateX(-50%);
+    opacity: 0;
+    transition: opacity 0.2s;
+    white-space: pre;
+    font-family: monospace;
+    font-size: 12px;
+    border: 1px solid #333;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.5);
+    pointer-events: none;
+}
+.tooltip-container:hover .tooltip-text {
+    visibility: visible;
+    opacity: 1;
+}

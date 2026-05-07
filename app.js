@@ -145,15 +145,21 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({method: 'server.ping', params: {}, id: Date.now()}));
                 }, 20000);
             } else if (exchange === 'gate') {
+                activeSockets[key].lastDataTime = Date.now();
                 activeSockets[key].pingInt = setInterval(() => {
                     if (ws.readyState === WebSocket.OPEN) {
+                        // Force reconnect if no data for 30 seconds (silent disconnect)
+                        if (Date.now() - activeSockets[key].lastDataTime > 30000) {
+                            console.log(`Gate ${marketType} stale — forcing reconnect`);
+                            ws.close();
+                            return;
+                        }
                         ws.send(JSON.stringify({
                             time: Math.floor(Date.now() / 1000),
-                            channel: marketType === 'futures' ? "futures.ping" : "spot.ping",
-                            event: "ping"
+                            channel: marketType === 'futures' ? "futures.ping" : "spot.ping"
                         }));
                     }
-                }, 15000);
+                }, 10000);
             }
             activeSockets[key].subs.forEach(ticker => {
                 ws.send(cfg.subMsg(ticker, marketType));
@@ -211,6 +217,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (data.result && data.result.b && data.result.a) {
                     rawTicker = data.result.s;
                     price = (parseFloat(data.result.b) + parseFloat(data.result.a)) / 2;
+                    // Update last data time for stale detection
+                    const gateKey = getSocketKey('gate', data.channel.startsWith('futures') ? 'futures' : 'spot');
+                    if (activeSockets[gateKey]) activeSockets[gateKey].lastDataTime = Date.now();
                 }
             } else if (exchange === 'hyperliquid' && data.channel === 'l2Book') {
                 if (data.data && data.data.levels && data.data.levels[0] && data.data.levels[1]) {
@@ -324,7 +333,16 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Interval for exchanges without native WSS implemented here
+    // Interval for exchanges without native WSS or with stale connections
+    const isWsStale = (exchange, marketType) => {
+        const key = getSocketKey(exchange, marketType);
+        const sock = activeSockets[key];
+        if (!WS_CONFIG[exchange] || !sock || sock.ws.readyState !== WebSocket.OPEN) return true;
+        // Gate.io: check if data is stale (no update in 15s)
+        if (exchange === 'gate' && sock.lastDataTime && (Date.now() - sock.lastDataTime > 15000)) return true;
+        return false;
+    };
+
     setInterval(() => {
         document.querySelectorAll('.position-card').forEach(card => {
             const shortEx = card.querySelector('.short-exchange').value;
@@ -333,15 +351,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const longMarket = card.querySelector('.long-market').value;
             const shortTicker = card.querySelector('.short-ticker').value.trim();
             const longTicker = card.querySelector('.long-ticker').value.trim();
-            
-            const shortWsKey = getSocketKey(shortEx, shortMarket);
-            const longWsKey = getSocketKey(longEx, longMarket);
 
-            // Fail-safe: Если биржа из красной зоны (нет WS_CONFIG), или вебсокет отвалился/не смог подключиться - опрашиваем через REST
-            if (shortTicker && (!WS_CONFIG[shortEx] || !activeSockets[shortWsKey] || activeSockets[shortWsKey].ws.readyState !== WebSocket.OPEN)) {
+            if (shortTicker && isWsStale(shortEx, shortMarket)) {
                 pollRestPrice(shortEx, shortTicker, shortMarket, card.querySelector('.current-a'), card);
             }
-            if (longTicker && (!WS_CONFIG[longEx] || !activeSockets[longWsKey] || activeSockets[longWsKey].ws.readyState !== WebSocket.OPEN)) {
+            if (longTicker && isWsStale(longEx, longMarket)) {
                 pollRestPrice(longEx, longTicker, longMarket, card.querySelector('.current-b'), card);
             }
         });
@@ -386,6 +400,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 let url = marketType === 'futures' ? `https://api.hbdm.com/linear-swap-ex/market/detail/merged?contract_code=${ticker}-USDT` : `https://api.huobi.pro/market/detail/merged?symbol=${ticker.toLowerCase()}usdt`;
                 const data = await fetchRESTJSON(url);
                 if (data && data.tick) price = parseFloat(data.tick.close);
+            } else if (exchange === "gate") {
+                let url = marketType === 'futures'
+                    ? `https://api.gateio.ws/api/v4/futures/usdt/tickers?contract=${ticker}_USDT`
+                    : `https://api.gateio.ws/api/v4/spot/tickers?currency_pair=${ticker}_USDT`;
+                const data = await fetchRESTJSON(url);
+                if (data && Array.isArray(data) && data[0]) {
+                    price = parseFloat(data[0].last);
+                }
             }
         } catch(e){}
 
@@ -397,7 +419,66 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     // --- Funding Logic ---
-    async function fetchHistoricalFunding(exchange, ticker, startTime, marketType) {
+
+    // Fetch 8h MARK PRICE klines — the exact price exchanges use for funding calculation
+    async function fetchKlines(exchange, ticker, startTime) {
+        ticker = ticker.toUpperCase();
+        try {
+            if (exchange === 'binance' || exchange === 'aster') {
+                const baseUrl = exchange === 'aster' ? 'https://fapi.asterdex.com' : 'https://fapi.binance.com';
+                // markPriceKlines = exact mark price used for funding settlement
+                const data = await fetchRESTJSON(`${baseUrl}/fapi/v1/markPriceKlines?symbol=${ticker}USDT&interval=8h&startTime=${startTime}&limit=1000`);
+                if (data && Array.isArray(data)) return data.map(k => ({ time: k[6], price: parseFloat(k[4]) }));
+                // Fallback to regular klines if markPriceKlines not available
+                const fallback = await fetchRESTJSON(`${baseUrl}/fapi/v1/klines?symbol=${ticker}USDT&interval=8h&startTime=${startTime}&limit=1000`);
+                if (fallback && Array.isArray(fallback)) return fallback.map(k => ({ time: k[6], price: parseFloat(k[4]) }));
+            } else if (exchange === 'bybit') {
+                // Bybit mark price kline endpoint
+                const data = await fetchRESTJSON(`https://api.bybit.com/v5/market/mark-price-kline?category=linear&symbol=${ticker}USDT&interval=480&start=${startTime}&limit=200`);
+                if (data && data.result && data.result.list) return data.result.list.map(k => ({ time: parseInt(k[0]) + 28800000, price: parseFloat(k[4]) }));
+                // Fallback to regular klines
+                const fallback = await fetchRESTJSON(`https://api.bybit.com/v5/market/kline?category=linear&symbol=${ticker}USDT&interval=480&start=${startTime}&limit=200`);
+                if (fallback && fallback.result && fallback.result.list) return fallback.result.list.map(k => ({ time: parseInt(k[0]) + 28800000, price: parseFloat(k[4]) }));
+            } else if (exchange === 'bitget') {
+                // Bitget mark price kline
+                const data = await fetchRESTJSON(`https://api.bitget.com/api/mix/v1/market/mark-candles?symbol=${ticker}USDT_UMCBL&granularity=28800&startTime=${startTime}&endTime=${Date.now()}`);
+                if (data && Array.isArray(data)) return data.map(k => ({ time: parseInt(k[0]) + 28800000, price: parseFloat(k[4]) }));
+                // Fallback
+                const fallback = await fetchRESTJSON(`https://api.bitget.com/api/mix/v1/market/candles?symbol=${ticker}USDT_UMCBL&granularity=28800&startTime=${startTime}&endTime=${Date.now()}`);
+                if (fallback && Array.isArray(fallback)) return fallback.map(k => ({ time: parseInt(k[0]) + 28800000, price: parseFloat(k[4]) }));
+            } else if (exchange === 'hyperliquid') {
+                // Hyperliquid: trade price ≈ mark price on DEX
+                const res = await fetch('https://api.hyperliquid.xyz/info', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({type: 'candleSnapshot', req: {coin: ticker, interval: '8h', startTime, endTime: Date.now()}})
+                });
+                const data = await res.json();
+                if (data && Array.isArray(data)) return data.map(k => ({ time: k.t + 28800000, price: parseFloat(k.c) }));
+            }
+        } catch(e) {
+            console.error(`Klines Error for ${exchange}:`, e);
+        }
+        return [];
+    }
+
+    // Match each funding payment with the closest kline close price
+    function attachMarkPrices(history, klines, entryPrice) {
+        if (!klines || klines.length === 0) return history;
+        return history.map(h => {
+            let bestPrice = entryPrice;
+            let bestDiff = Infinity;
+            for (const k of klines) {
+                const diff = Math.abs(k.time - h.time);
+                if (diff < bestDiff) {
+                    bestDiff = diff;
+                    bestPrice = k.price;
+                }
+            }
+            return { ...h, markPrice: bestPrice };
+        });
+    }
+
+    async function fetchHistoricalFunding(exchange, ticker, startTime, marketType, entryPrice) {
         if (!startTime || isNaN(startTime) || marketType === 'spot') return { sum: 0, count: 0, currentRate: 0, history: [] };
         ticker = ticker.toUpperCase();
         
@@ -407,47 +488,57 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             if (exchange === "binance" || exchange === "aster") {
                 const baseUrl = exchange === "aster" ? "https://fapi.asterdex.com" : "https://fapi.binance.com";
-                const [histData, curData] = await Promise.all([
+                const [histData, curData, klines] = await Promise.all([
                     fetchRESTJSON(`${baseUrl}/fapi/v1/fundingRate?symbol=${ticker}USDT&startTime=${startTime}&limit=1000`),
-                    fetchRESTJSON(`${baseUrl}/fapi/v1/premiumIndex?symbol=${ticker}USDT`)
+                    fetchRESTJSON(`${baseUrl}/fapi/v1/premiumIndex?symbol=${ticker}USDT`),
+                    fetchKlines(exchange, ticker, startTime)
                 ]);
                 if (histData && Array.isArray(histData)) {
                     sum = histData.reduce((a,b)=>a+parseFloat(b.fundingRate), 0);
                     count = histData.length;
                     history = histData.map(b => ({ time: parseInt(b.fundingTime), rate: parseFloat(b.fundingRate) }));
+                    history = attachMarkPrices(history, klines, entryPrice);
                 }
                 if (curData && curData.lastFundingRate) currentRate = parseFloat(curData.lastFundingRate);
             } else if (exchange === "hyperliquid") {
-                 const res = await fetch("https://api.hyperliquid.xyz/info", {
-                    method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({type: "fundingHistory", coin: ticker, startTime: startTime})
-                });
-                const data = await res.json();
+                const [fundRes, klines] = await Promise.all([
+                    fetch("https://api.hyperliquid.xyz/info", {
+                        method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({type: "fundingHistory", coin: ticker, startTime: startTime})
+                    }),
+                    fetchKlines(exchange, ticker, startTime)
+                ]);
+                const data = await fundRes.json();
                 if (data && Array.isArray(data)) {
                     sum = data.reduce((a,b)=>a+parseFloat(b.fundingRate), 0);
                     count = data.length;
                     history = data.map(b => ({ time: parseInt(b.time), rate: parseFloat(b.fundingRate) }));
+                    history = attachMarkPrices(history, klines, entryPrice);
                 }
             } else if (exchange === "bitget") {
-                const [histData, curData] = await Promise.all([
+                const [histData, curData, klines] = await Promise.all([
                     fetchRESTJSON(`https://api.bitget.com/api/mix/v1/market/history-fundRate?symbol=${ticker}USDT_UMCBL&pageSize=100&pageNo=1`),
-                    fetchRESTJSON(`https://api.bitget.com/api/mix/v1/market/ticker?symbol=${ticker}USDT_UMCBL`)
+                    fetchRESTJSON(`https://api.bitget.com/api/mix/v1/market/ticker?symbol=${ticker}USDT_UMCBL`),
+                    fetchKlines(exchange, ticker, startTime)
                 ]);
                 if (histData && histData.data && histData.data.resultList) {
                     const valid = histData.data.resultList.filter(i => parseInt(i.settleTime) >= startTime);
                     sum = valid.reduce((a,b)=>a+parseFloat(b.fundingRate), 0);
                     count = valid.length;
                     history = valid.map(b => ({ time: parseInt(b.settleTime), rate: parseFloat(b.fundingRate) }));
+                    history = attachMarkPrices(history, klines, entryPrice);
                 }
                 if (curData && curData.data && curData.data.fundingRate) currentRate = parseFloat(curData.data.fundingRate);
             } else if (exchange === "bybit") {
-                const [histData, curData] = await Promise.all([
+                const [histData, curData, klines] = await Promise.all([
                     fetchRESTJSON(`https://api.bybit.com/v5/market/funding/history?category=linear&symbol=${ticker}USDT&startTime=${startTime}`),
-                    fetchRESTJSON(`https://api.bybit.com/v5/market/tickers?category=linear&symbol=${ticker}USDT`)
+                    fetchRESTJSON(`https://api.bybit.com/v5/market/tickers?category=linear&symbol=${ticker}USDT`),
+                    fetchKlines(exchange, ticker, startTime)
                 ]);
                 if (histData && histData.result && histData.result.list) {
                     sum = histData.result.list.reduce((a,b)=>a+parseFloat(b.fundingRate), 0);
                     count = histData.result.list.length;
                     history = histData.result.list.map(b => ({ time: parseInt(b.fundingRateTimestamp), rate: parseFloat(b.fundingRate) }));
+                    history = attachMarkPrices(history, klines, entryPrice);
                 }
                 if (curData && curData.result && curData.result.list && curData.result.list[0]) {
                     currentRate = parseFloat(curData.result.list[0].fundingRate);
@@ -477,12 +568,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const longMarket = card.querySelector('.long-market').value;
         const shortTicker = card.querySelector('.short-ticker').value.trim();
         const longTicker = card.querySelector('.long-ticker').value.trim();
+        const entryA = parseFloat(card.querySelector('.entry-a').value) || 0;
+        const entryB = parseFloat(card.querySelector('.entry-b').value) || 0;
 
         let shortFunding = { sum: 0, count: 0, currentRate: 0, history: [] };
         let longFunding = { sum: 0, count: 0, currentRate: 0, history: [] };
 
-        if (shortTicker) shortFunding = await fetchHistoricalFunding(shortEx, shortTicker, startTime, shortMarket);
-        if (longTicker) longFunding = await fetchHistoricalFunding(longEx, longTicker, startTime, longMarket);
+        if (shortTicker) shortFunding = await fetchHistoricalFunding(shortEx, shortTicker, startTime, shortMarket, entryA);
+        if (longTicker) longFunding = await fetchHistoricalFunding(longEx, longTicker, startTime, longMarket, entryB);
 
         card.dataset.shortFundingSum = shortFunding.sum;
         card.dataset.longFundingSum = longFunding.sum;
@@ -637,8 +730,26 @@ document.addEventListener('DOMContentLoaded', () => {
         const shortFundingRate = parseFloat(card.dataset.shortFundingRate) || 0;
         const longFundingRate = parseFloat(card.dataset.longFundingRate) || 0;
 
-        const shortFundingPnl = amount * entryA * shortFundingSum;
-        const longFundingPnl = -(amount * entryB * longFundingSum);
+        // Calculate funding using real mark prices from klines
+        // Funding = sum(quantity * markPrice_at_settlement * fundingRate_i)
+        const calcFundingWithHistory = (historyStr, entry, isShort) => {
+            try {
+                const hist = JSON.parse(historyStr);
+                if (!hist || hist.length === 0) return 0;
+                let total = 0;
+                for (const item of hist) {
+                    // Use real mark price from kline data; fallback to entry price
+                    const mp = item.markPrice || entry;
+                    total += amount * mp * item.rate;
+                }
+                return isShort ? total : -total;
+            } catch(e) {
+                return 0;
+            }
+        };
+
+        const shortFundingPnl = calcFundingWithHistory(card.dataset.shortFundingHistory, entryA, true);
+        const longFundingPnl = calcFundingWithHistory(card.dataset.longFundingHistory, entryB, false);
         const funding = shortFundingPnl + longFundingPnl;
 
         const totalPnl = spreadPnl + funding;

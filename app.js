@@ -454,6 +454,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
                 const data = await res.json();
                 if (data && Array.isArray(data)) return data.map(k => ({ time: k.t + 28800000, price: parseFloat(k.c) }));
+            } else if (exchange === 'okx') {
+                const data = await fetchRESTJSON(`https://www.okx.com/api/v5/market/history-mark-price-candles?instId=${ticker}-USDT-SWAP&bar=8H&limit=100&t=${Date.now()}`);
+                if (data && data.data) return data.data.map(k => ({ time: parseInt(k[0]), price: parseFloat(k[4]) }));
             }
         } catch(e) {
             console.error(`Klines Error for ${exchange}:`, e);
@@ -531,7 +534,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } else if (exchange === "bybit") {
                 const [histData, curData, klines] = await Promise.all([
                     fetchRESTJSON(`https://api.bybit.com/v5/market/funding/history?category=linear&symbol=${ticker}USDT&startTime=${startTime}`),
-                    fetchRESTJSON(`https://api.bybit.com/v5/market/tickers?category=linear&symbol=${ticker}USDT`),
+                    fetchRESTJSON(`https://api.bybit.com/v5/market/tickers?category=linear&symbol=${ticker}USDT&t=${Date.now()}`),
                     fetchKlines(exchange, ticker, startTime)
                 ]);
                 if (histData && histData.result && histData.result.list) {
@@ -542,6 +545,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 if (curData && curData.result && curData.result.list && curData.result.list[0]) {
                     currentRate = parseFloat(curData.result.list[0].fundingRate);
+                }
+            } else if (exchange === "okx") {
+                const [histData, curData, klines] = await Promise.all([
+                    fetchRESTJSON(`https://www.okx.com/api/v5/public/funding-rate-history?instId=${ticker}-USDT-SWAP&limit=100&t=${Date.now()}`),
+                    fetchRESTJSON(`https://www.okx.com/api/v5/public/funding-rate?instId=${ticker}-USDT-SWAP&t=${Date.now()}`),
+                    fetchKlines(exchange, ticker, startTime)
+                ]);
+                if (histData && histData.data) {
+                    const valid = histData.data.filter(i => parseInt(i.fundingTime) >= startTime);
+                    sum = valid.reduce((a,b)=>a+parseFloat(b.fundingRate), 0);
+                    count = valid.length;
+                    history = valid.map(b => ({ time: parseInt(b.fundingTime), rate: parseFloat(b.fundingRate) }));
+                    history = attachMarkPrices(history, klines, entryPrice);
+                }
+                if (curData && curData.data && curData.data[0]) {
+                    currentRate = parseFloat(curData.data[0].fundingRate);
                 }
             } else {
                 // Fallback estimation

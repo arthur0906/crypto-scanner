@@ -216,6 +216,13 @@ async def get_funding(exchange: str, ticker: str, start_time: int, market_type: 
             if data and data.get("result", {}).get("list"):
                 return {"sum": sum(float(i["fundingRate"]) for i in data["result"]["list"]), "count": len(data["result"]["list"])}
 
+        elif exchange == "okx":
+            symbol = f"{ticker}-USDT-SWAP" if not ticker.endswith("USDT") else f"{ticker.replace('USDT', '')}-USDT-SWAP"
+            data = await fetch_json(f"https://www.okx.com/api/v5/public/funding-rate-history?instId={symbol}&limit=100")
+            if data and data.get("data"):
+                valid = [float(i["fundingRate"]) for i in data["data"] if int(i["fundingTime"]) >= start_time]
+                return {"sum": sum(valid), "count": len(valid)}
+
         # Fallback estimator
         current_time = int(time.time() * 1000)
         hours_passed = (current_time - start_time) / (1000 * 60 * 60)

@@ -427,10 +427,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (exchange === 'binance' || exchange === 'aster') {
                 const baseUrl = exchange === 'aster' ? 'https://fapi.asterdex.com' : 'https://fapi.binance.com';
                 // markPriceKlines = exact mark price used for funding settlement
-                const data = await fetchRESTJSON(`${baseUrl}/fapi/v1/markPriceKlines?symbol=${ticker}USDT&interval=8h&startTime=${startTime}&limit=1000`);
+                const data = await fetchRESTJSON(`${baseUrl}/fapi/v1/markPriceKlines?symbol=${ticker}USDT&interval=8h&startTime=${startTime}&endTime=${Date.now()}&limit=1000`);
                 if (data && Array.isArray(data)) return data.map(k => ({ time: k[6], price: parseFloat(k[4]) }));
                 // Fallback to regular klines if markPriceKlines not available
-                const fallback = await fetchRESTJSON(`${baseUrl}/fapi/v1/klines?symbol=${ticker}USDT&interval=8h&startTime=${startTime}&limit=1000`);
+                const fallback = await fetchRESTJSON(`${baseUrl}/fapi/v1/klines?symbol=${ticker}USDT&interval=8h&startTime=${startTime}&endTime=${Date.now()}&limit=1000`);
                 if (fallback && Array.isArray(fallback)) return fallback.map(k => ({ time: k[6], price: parseFloat(k[4]) }));
             } else if (exchange === 'bybit') {
                 // Bybit mark price kline endpoint
@@ -441,10 +441,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (fallback && fallback.result && fallback.result.list) return fallback.result.list.map(k => ({ time: parseInt(k[0]) + 28800000, price: parseFloat(k[4]) }));
             } else if (exchange === 'bitget') {
                 // Bitget mark price kline
-                const data = await fetchRESTJSON(`https://api.bitget.com/api/mix/v1/market/mark-candles?symbol=${ticker}USDT_UMCBL&granularity=28800&startTime=${startTime}&endTime=${Date.now()}`);
+                const data = await fetchRESTJSON(`https://api.bitget.com/api/mix/v1/market/mark-candles?symbol=${ticker}USDT_UMCBL&granularity=28800&startTime=${startTime}&endTime=${Date.now()}&endTime=${Date.now()}`);
                 if (data && Array.isArray(data)) return data.map(k => ({ time: parseInt(k[0]) + 28800000, price: parseFloat(k[4]) }));
                 // Fallback
-                const fallback = await fetchRESTJSON(`https://api.bitget.com/api/mix/v1/market/candles?symbol=${ticker}USDT_UMCBL&granularity=28800&startTime=${startTime}&endTime=${Date.now()}`);
+                const fallback = await fetchRESTJSON(`https://api.bitget.com/api/mix/v1/market/candles?symbol=${ticker}USDT_UMCBL&granularity=28800&startTime=${startTime}&endTime=${Date.now()}&endTime=${Date.now()}`);
                 if (fallback && Array.isArray(fallback)) return fallback.map(k => ({ time: parseInt(k[0]) + 28800000, price: parseFloat(k[4]) }));
             } else if (exchange === 'hyperliquid') {
                 // Hyperliquid: trade price ≈ mark price on DEX
@@ -492,7 +492,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (exchange === "binance" || exchange === "aster") {
                 const baseUrl = exchange === "aster" ? "https://fapi.asterdex.com" : "https://fapi.binance.com";
                 const [histData, curData, klines] = await Promise.all([
-                    fetchRESTJSON(`${baseUrl}/fapi/v1/fundingRate?symbol=${ticker}USDT&startTime=${startTime}&limit=1000`),
+                    fetchRESTJSON(`${baseUrl}/fapi/v1/fundingRate?symbol=${ticker}USDT&startTime=${startTime}&endTime=${Date.now()}&limit=1000`),
                     fetchRESTJSON(`${baseUrl}/fapi/v1/premiumIndex?symbol=${ticker}USDT`),
                     fetchKlines(exchange, ticker, startTime)
                 ]);
@@ -533,7 +533,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (curData && curData.data && curData.data.fundingRate) currentRate = parseFloat(curData.data.fundingRate);
             } else if (exchange === "bybit") {
                 const [histData, curData, klines] = await Promise.all([
-                    fetchRESTJSON(`https://api.bybit.com/v5/market/funding/history?category=linear&symbol=${ticker}USDT&startTime=${startTime}`),
+                    fetchRESTJSON(`https://api.bybit.com/v5/market/funding/history?category=linear&symbol=${ticker}USDT&startTime=${startTime}&endTime=${Date.now()}`),
                     fetchRESTJSON(`https://api.bybit.com/v5/market/tickers?category=linear&symbol=${ticker}USDT&t=${Date.now()}`),
                     fetchKlines(exchange, ticker, startTime)
                 ]);
